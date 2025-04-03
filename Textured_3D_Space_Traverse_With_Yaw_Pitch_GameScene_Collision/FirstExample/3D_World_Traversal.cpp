@@ -48,6 +48,9 @@ std::vector<GameObject> enemyList;
 GLuint enemyTextureID;
 float spawnTimer = 0.0f;
 float spawnInterval = 3000.0f;
+int playerHealth = 100;
+bool gameWon = false;
+bool gameOver = false;
 
 const int Num_Obstacles = 20;
 float obstacle_data[Num_Obstacles][3];
@@ -74,6 +77,8 @@ float mouse_sensitivity = 0.01f;
 
 const GLuint NumVertices = 28;
 
+
+
 float randomFloat(float a, float b) {
     float random = ((float)rand()) / (float)RAND_MAX;
     return a + random * (b - a);
@@ -95,8 +100,8 @@ void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
     if (distanceToPlayer < 5.0f) return;
 
     GameObject enemy;
-    enemy.location = glm::vec3(x, 0.5f, z);  // Set Y to 0.5 to rest on ground
     enemy.scale = glm::vec3(1.0f);
+    enemy.location = glm::vec3(x, 0.5f, z);  // Set Y to 0.5 to rest on ground
     enemy.rotation = glm::vec3(0.0f);
     enemy.type = ENEMY;
     enemy.velocity = 0.01f + (rand() % 10) * 0.002f;
@@ -111,25 +116,54 @@ void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
 }
 
 void checkCollisions() {
+    // First: Check sceneGraph vs sceneGraph (e.g., bullets hitting obstacles, etc.)
     for (int i = 0; i < sceneGraph.size(); i++) {
         for (int j = 0; j < sceneGraph.size(); j++) {
             if (i != j && sceneGraph[i].isAlive && sceneGraph[j].isAlive &&
                 !(sceneGraph[i].type == OBSTACLE && sceneGraph[j].type == OBSTACLE)) {
                 GameObject& one = sceneGraph[i];
                 GameObject& two = sceneGraph[j];
-                if (glm::abs(one.location.x - two.location.x) <= (one.collider_dimension / 2 + two.collider_dimension / 2) &&
+
+                bool collided = glm::abs(one.location.x - two.location.x) <= (one.collider_dimension / 2 + two.collider_dimension / 2) &&
                     glm::abs(one.location.y - two.location.y) <= (one.collider_dimension / 2 + two.collider_dimension / 2) &&
-                    glm::abs(one.location.z - two.location.z) <= (one.collider_dimension / 2 + two.collider_dimension / 2)) {
+                    glm::abs(one.location.z - two.location.z) <= (one.collider_dimension / 2 + two.collider_dimension / 2);
+
+                if (collided) {
                     one.isCollided = true;
                     two.isCollided = true;
                 }
             }
         }
     }
+
+    // Second: Check sceneGraph (bullets) vs enemyList (enemies)
+    for (int i = 0; i < sceneGraph.size(); i++) {
+        GameObject& bullet = sceneGraph[i];
+        if (!bullet.isAlive || bullet.type != BULLET) continue;
+
+        for (int j = 0; j < enemyList.size(); j++) {
+            GameObject& enemy = enemyList[j];
+            if (!enemy.isAlive) continue;
+
+            bool collided = glm::abs(bullet.location.x - enemy.location.x) <= (bullet.collider_dimension / 2 + enemy.collider_dimension / 2) &&
+                glm::abs(bullet.location.y - enemy.location.y) <= (bullet.collider_dimension / 2 + enemy.collider_dimension / 2) &&
+                glm::abs(bullet.location.z - enemy.location.z) <= (bullet.collider_dimension / 2 + enemy.collider_dimension / 2);
+
+            if (collided) {
+                bullet.isAlive = false;
+                enemy.isAlive = false;
+                bullet.isCollided = true;
+                enemy.isCollided = true;
+                std::cout << "Bullet hit enemy!" << std::endl;
+            }
+        }
+    }
 }
+
 
 void updateSceneGraph() {
     checkCollisions();
+
     for (int i = 0; i < sceneGraph.size(); i++) {
         GameObject& go = sceneGraph[i];
         if (go.life_span > 0 && go.isAlive && go.living_time >= go.life_span)
@@ -139,13 +173,32 @@ void updateSceneGraph() {
             go.living_time += deltaTime;
         }
     }
+
     for (int i = 0; i < enemyList.size(); i++) {
         GameObject& enemy = enemyList[i];
         if (!enemy.isAlive) continue;
+
+        // Move toward player
         enemy.moving_direction = glm::normalize(cam_pos - enemy.location);
         enemy.location += enemy.moving_direction * enemy.velocity * (GLfloat)deltaTime;
+
+        // Check collision with player
+        float dist = glm::length(cam_pos - enemy.location);
+        if (dist < enemy.collider_dimension / 2.0f) {
+            if (playerHealth > 0) {
+                playerHealth -= 10;
+                enemy.isAlive = false; // remove enemy after hit
+                std::cout << "Player hit! Health: " << playerHealth << std::endl;
+            }
+
+            if (playerHealth <= 0 && !gameOver) {
+                gameOver = true;
+                std::cout << "Game Over! You lost!" << std::endl;
+            }
+        }
     }
 }
+
 
 void draw_level() {
     glBindTexture(GL_TEXTURE_2D, texture[0]);
@@ -255,6 +308,11 @@ void idle() {
     deltaTime = timeSinceStart - oldTimeSinceStart;
     oldTimeSinceStart = timeSinceStart;
 
+    if (!gameOver && !gameWon && timeSinceStart >= 30000) {
+        gameWon = true;
+        std::cout << "You Win!" << std::endl;
+    }
+
     spawnTimer += deltaTime;
     if (spawnTimer >= spawnInterval) {
         spawnTimer = 0;
@@ -295,7 +353,7 @@ void init()
         sceneGraph.push_back(go);
     }
 
-    enemyTextureID = SOIL_load_OGL_texture("slime.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
+    enemyTextureID = SOIL_load_OGL_texture("ghost.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
     if (enemyTextureID == 0) {
         std::cout << "Failed to load enemy texture!" << std::endl;
     }
