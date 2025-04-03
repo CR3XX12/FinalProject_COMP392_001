@@ -51,6 +51,8 @@ float spawnInterval = 3000.0f;
 int playerHealth = 100;
 bool gameWon = false;
 bool gameOver = false;
+int playerScore = 0;
+
 
 const int Num_Obstacles = 20;
 float obstacle_data[Num_Obstacles][3];
@@ -104,7 +106,7 @@ void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
     enemy.location = glm::vec3(x, 0.5f, z);  // Set Y to 0.5 to rest on ground
     enemy.rotation = glm::vec3(0.0f);
     enemy.type = ENEMY;
-    enemy.velocity = 0.01f + (rand() % 10) * 0.002f;
+    enemy.velocity = 0.003f + (rand() % 5) * 0.001f;
     enemy.isAlive = true;
     enemy.collider_dimension = 0.9f;
     enemy.isCollided = false;
@@ -154,6 +156,7 @@ void checkCollisions() {
                 enemy.isAlive = false;
                 bullet.isCollided = true;
                 enemy.isCollided = true;
+                playerScore += 20;
                 std::cout << "Bullet hit enemy!" << std::endl;
             }
         }
@@ -298,6 +301,11 @@ void display() {
         else if (gameWon) {
             renderBitmapString(460.0f, 520.0f, GLUT_BITMAP_HELVETICA_18, "You Win!");
         }
+
+        // Display Final Score
+        char scoreText[64];
+        sprintf(scoreText, "Final Score: %d", playerScore);
+        renderBitmapString(440.0f, 500.0f, GLUT_BITMAP_HELVETICA_18, scoreText);
 
         // Restore projection and modelview matrices
         glPopMatrix(); // MODELVIEW
@@ -471,7 +479,7 @@ void init()
     GLint width1, height1;
     unsigned char* textureData1 = SOIL_load_image("grass.png", &width1, &height1, 0, SOIL_LOAD_RGB);
     GLint width2, height2;
-    unsigned char* textureData2 = SOIL_load_image("apple.png", &width2, &height2, 0, SOIL_LOAD_RGB);
+    unsigned char* textureData2 = SOIL_load_image("box.png", &width2, &height2, 0, SOIL_LOAD_RGB);
 
     glGenBuffers(2, Buffers);
     glBindBuffer(GL_ARRAY_BUFFER, Buffers[0]);
