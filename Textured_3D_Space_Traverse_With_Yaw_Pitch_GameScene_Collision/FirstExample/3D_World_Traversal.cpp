@@ -1,4 +1,4 @@
-// 3D_World_Traversal.cpp
+﻿// 3D_World_Traversal.cpp
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // This code is used to teach the course "Advanced Graphics" in Centennial College
@@ -222,26 +222,105 @@ void draw_level() {
     }
 }
 
+void renderBitmapString(float x, float y, void* font, const char* string) {
+    glWindowPos2f(x, y); // Absolute screen-space position (bypasses matrices)
+    for (const char* c = string; *c != '\0'; c++) {
+        glutBitmapCharacter(font, *c);
+    }
+}
+
+void drawTextBackgroundBox(float x, float y, float width, float height) {
+    glColor3f(0.4f, 0.2f, 0.1f); // Brown
+
+    glBegin(GL_QUADS);
+    glVertex2f(x, y);
+    glVertex2f(x + width, y);
+    glVertex2f(x + width, y + height);
+    glVertex2f(x, y + height);
+    glEnd();
+}
+
+
 void display() {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Reset model matrix
     model_view = glm::mat4(1.0);
     glUniformMatrix4fv(location, 1, GL_FALSE, &model_view[0][0]);
 
+    // Camera matrix
     glm::vec3 look_at = cam_pos + looking_dir_vector;
     glm::mat4 camera_matrix = glm::lookAt(cam_pos, look_at, up_vector);
     glUniformMatrix4fv(cam_mat_location, 1, GL_FALSE, &camera_matrix[0][0]);
 
+    // Projection matrix
     glm::mat4 proj_matrix = glm::frustum(-0.01f, 0.01f, -0.01f, 0.01f, 0.01f, 100.0f);
     glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, &proj_matrix[0][0]);
 
+    // Draw level and game objects
     draw_level();
+
+    // === Overlay: Win or Loss Message ===
+    if (gameWon || gameOver) {
+        // Disable depth and texture so 2D overlay isn't affected
+        glDisable(GL_TEXTURE_2D);
+        glDisable(GL_DEPTH_TEST);
+
+        // Enable blending so we can draw solid color quads over screen
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        // Switch to 2D orthographic projection for screen-space drawing
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        gluOrtho2D(0, 1024, 0, 1024);  // Match your window size
+
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+
+        // Draw a brown rectangle as background behind the text
+        glColor3f(0.4f, 0.2f, 0.1f);  // Dark brown
+        glBegin(GL_QUADS);
+        glVertex2f(390.0f, 495.0f);  // slightly bigger for padding
+        glVertex2f(670.0f, 495.0f);
+        glVertex2f(670.0f, 545.0f);
+        glVertex2f(390.0f, 545.0f);
+        glEnd();
+
+        // Now draw the text on top of the background box
+        glColor3f(1.0f, 1.0f, 1.0f);  // White
+        if (gameOver) {
+            renderBitmapString(420.0f, 520.0f, GLUT_BITMAP_HELVETICA_18, "Game Over! You lost!");
+        }
+        else if (gameWon) {
+            renderBitmapString(460.0f, 520.0f, GLUT_BITMAP_HELVETICA_18, "You Win!");
+        }
+
+        // Restore projection and modelview matrices
+        glPopMatrix(); // MODELVIEW
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+
+        // Restore OpenGL settings
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+    }
+
+
+
+
     glFlush();
 }
 
-
 void keyboard(unsigned char key, int x, int y)
 {
+    if (gameWon || gameOver) return;  // freeze controls
+
 	if (key == 'a')
 	{
 		//Moving camera along opposit direction of side vector
@@ -313,11 +392,13 @@ void idle() {
         std::cout << "You Win!" << std::endl;
     }
 
-    spawnTimer += deltaTime;
-    if (spawnTimer >= spawnInterval) {
-        spawnTimer = 0;
-        spawnEnemy(enemyList, enemyTextureID);
-        spawnInterval = std::max(500.0f, spawnInterval - 50.0f);
+    if (!gameOver && !gameWon) {
+        spawnTimer += deltaTime;
+        if (spawnTimer >= spawnInterval) {
+            spawnTimer = 0;
+            spawnEnemy(enemyList, enemyTextureID);
+            spawnInterval = std::max(500.0f, spawnInterval - 50.0f);
+        }
     }
 
     glutPostRedisplay();
@@ -424,6 +505,10 @@ void init()
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    
+    // Set a bright sky blue background
+    glClearColor(0.4f, 0.7f, 1.0f, 1.0f);  // R, G, B, A
+
 }
 
 
