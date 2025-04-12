@@ -40,6 +40,10 @@ struct GameObject {
     bool isAlive;
     bool isCollided;
     GLuint textureID;
+    int lastShotTime; // For enemy shooting cooldown
+    int owner; // 0 = player, 1 = enemy
+
+
 };
 
 // === Globals ===
@@ -48,6 +52,7 @@ std::vector<GameObject> enemyList;
 GLuint enemyTextureID;
 float spawnTimer = 0.0f;
 float spawnInterval = 3000.0f;
+const int enemyShootCooldown = 2000; // milliseconds between shots
 int playerHealth = 100;
 bool gameWon = false;
 bool gameOver = false;
@@ -93,6 +98,50 @@ void drawCube(glm::vec3 scale, GLuint tex) {
     glDrawArrays(GL_QUADS, 4, 24);
 }
 
+void drawPyramid(glm::vec3 scale, GLuint tex) {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    //glColor4f(1.0f, 1.0f, 1.0f, 1.0f);  // Full brightness
+    glColor4ub(255, 255, 255, 255);  // Max out white/alpha
+
+
+    glPushMatrix();
+    glScalef(scale.x, scale.y, scale.z);
+
+    glBegin(GL_TRIANGLES);
+    // Front face
+    glTexCoord2f(0.5f, 1.0f); glVertex3f(0.0f, 1.0f, 0.0f);    // Top
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, 0.0f, 0.5f);   // Left
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(0.5f, 0.0f, 0.5f);    // Right
+
+    // Right face
+    glTexCoord2f(0.5f, 1.0f); glVertex3f(0.0f, 1.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(0.5f, 0.0f, 0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(0.5f, 0.0f, -0.5f);
+
+    // Back face
+    glTexCoord2f(0.5f, 1.0f); glVertex3f(0.0f, 1.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(0.5f, 0.0f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-0.5f, 0.0f, -0.5f);
+
+    // Left face
+    glTexCoord2f(0.5f, 1.0f); glVertex3f(0.0f, 1.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, 0.0f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-0.5f, 0.0f, 0.5f);
+    glEnd();
+
+    // Bottom face (optional — texture won't be visible often)
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, 0.0f, 0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(0.5f, 0.0f, 0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(0.5f, 0.0f, -0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.5f, 0.0f, -0.5f);
+    glEnd();
+
+    glPopMatrix();
+}
+
+
 void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
     float x = (rand() % 40 - 20);
     float z = (rand() % 40 - 20);
@@ -114,7 +163,9 @@ void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
     enemy.life_span = -1;
     enemy.textureID = enemyTexture;
     enemy.moving_direction = glm::vec3(0.0f);
+    enemy.lastShotTime = glutGet(GLUT_ELAPSED_TIME);
     enemies.push_back(enemy);
+
 }
 
 void checkCollisions() {
@@ -141,7 +192,7 @@ void checkCollisions() {
     // Second: Check sceneGraph (bullets) vs enemyList (enemies)
     for (int i = 0; i < sceneGraph.size(); i++) {
         GameObject& bullet = sceneGraph[i];
-        if (!bullet.isAlive || bullet.type != BULLET) continue;
+        if (!bullet.isAlive || bullet.type != BULLET || bullet.owner == 1) continue;
 
         for (int j = 0; j < enemyList.size(); j++) {
             GameObject& enemy = enemyList[j];
@@ -158,6 +209,22 @@ void checkCollisions() {
                 enemy.isCollided = true;
                 playerScore += 20;
                 std::cout << "Bullet hit enemy!" << std::endl;
+            }
+        }
+    }
+    // === Check if enemy bullets hit the player ===
+    for (GameObject& bullet : sceneGraph) {
+        if (!bullet.isAlive || bullet.type != BULLET || bullet.owner != 1) continue;
+
+        float distToPlayer = glm::length(bullet.location - cam_pos);
+        if (distToPlayer < bullet.collider_dimension / 2.0f) {
+            bullet.isAlive = false;
+            playerHealth -= 5;
+            std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
+
+            if (playerHealth <= 0 && !gameOver) {
+                gameOver = true;
+                std::cout << "Game Over! You lost!" << std::endl;
             }
         }
     }
@@ -185,6 +252,28 @@ void updateSceneGraph() {
         enemy.moving_direction = glm::normalize(cam_pos - enemy.location);
         enemy.location += enemy.moving_direction * enemy.velocity * (GLfloat)deltaTime;
 
+        // === ENEMY SHOOTING LOGIC HERE ===
+        int now = glutGet(GLUT_ELAPSED_TIME);
+        if (now - enemy.lastShotTime > enemyShootCooldown) {
+            GameObject bullet;
+            bullet.owner = 1;  // Enemy
+            bullet.location = enemy.location;
+            bullet.rotation = glm::vec3(0);
+            bullet.scale = glm::vec3(0.07f);
+            bullet.collider_dimension = bullet.scale.x;
+            bullet.isAlive = true;
+            bullet.living_time = 0;
+            bullet.isCollided = false;
+            bullet.velocity = 0.006f;
+            bullet.type = BULLET;
+            bullet.moving_direction = glm::normalize(cam_pos - enemy.location);
+            bullet.life_span = 4000;
+            bullet.textureID = texture[1]; // Or use a different one if available
+            sceneGraph.push_back(bullet);
+
+            enemy.lastShotTime = now;
+        }
+
         // Check collision with player
         float dist = glm::length(cam_pos - enemy.location);
         if (dist < enemy.collider_dimension / 2.0f) {
@@ -207,6 +296,10 @@ void draw_level() {
     glBindTexture(GL_TEXTURE_2D, texture[0]);
     glDrawArrays(GL_QUADS, 0, 4);
     updateSceneGraph();
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 
     for (GameObject& go : sceneGraph) {
         if (go.isAlive && !go.isCollided) {
@@ -220,7 +313,8 @@ void draw_level() {
         if (!enemy.isAlive || enemy.isCollided) continue;
         model_view = glm::translate(glm::mat4(1.0), enemy.location);
         glUniformMatrix4fv(location, 1, GL_FALSE, &model_view[0][0]);
-        drawCube(enemy.scale, enemy.textureID);
+        //drawCube(enemy.scale, enemy.textureID);
+        drawPyramid(enemy.scale, enemy.textureID);
         model_view = glm::mat4(1.0);
     }
 }
@@ -356,6 +450,7 @@ void keyboard(unsigned char key, int x, int y)
 		//Create a bullet and place it inside the GameScene
 
         GameObject bullet;
+        bullet.owner = 0;  // Player
         bullet.location = cam_pos;
         bullet.rotation = glm::vec3(0);
         bullet.scale = glm::vec3(0.07f);
@@ -442,10 +537,19 @@ void init()
         sceneGraph.push_back(go);
     }
 
-    enemyTextureID = SOIL_load_OGL_texture("ghost.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
+    enemyTextureID = SOIL_load_OGL_texture("fire.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
     if (enemyTextureID == 0) {
         std::cout << "Failed to load enemy texture!" << std::endl;
     }
+    else {
+        std::cout << "Enemy texture loaded: " << enemyTextureID << std::endl;
+    }
+    glBindTexture(GL_TEXTURE_2D, enemyTextureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
 
     ShaderInfo shaders[] = {
         { GL_VERTEX_SHADER, "triangles.vert" },
