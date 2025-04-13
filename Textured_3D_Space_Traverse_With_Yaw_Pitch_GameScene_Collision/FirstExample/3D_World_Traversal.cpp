@@ -17,6 +17,8 @@
 #include <iostream>
 #include <algorithm>
 
+void renderBitmapString(float x, float y, void* font, const char* string);
+
 using namespace std;
 
 // === Game Object ===
@@ -218,14 +220,19 @@ void checkCollisions() {
         float distToPlayer = glm::length(bullet.location - cam_pos);
         if (distToPlayer < bullet.collider_dimension / 2.0f) {
             bullet.isAlive = false;
-            playerHealth -= 10;
-            std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
 
-            if (playerHealth <= 0 && !gameOver) {
-                gameOver = true;
-                std::cout << "Game Over! You lost!" << std::endl;
+            if (!gameOver) {
+                playerHealth -= 10;
+                playerHealth = std::max(0, playerHealth);  // clamp to 0
+                std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
+
+                if (playerHealth <= 0) {
+                    gameOver = true;
+                    std::cout << "Game Over! You lost!" << std::endl;
+                }
             }
         }
+
     }
 }
 
@@ -276,17 +283,19 @@ void updateSceneGraph() {
         // Check collision with player
         float dist = glm::length(cam_pos - enemy.location);
         if (dist < enemy.collider_dimension / 2.0f) {
-            if (playerHealth > 0) {
+            if (!gameOver && playerHealth > 0) {
                 playerHealth -= 10;
-                enemy.isAlive = false; // remove enemy after hit
+                playerHealth = std::max(0, playerHealth);  // clamp to 0
+                enemy.isAlive = false;
                 std::cout << "Player hit! Health: " << playerHealth << std::endl;
-            }
 
-            if (playerHealth <= 0 && !gameOver) {
-                gameOver = true;
-                std::cout << "Game Over! You lost!" << std::endl;
+                if (playerHealth <= 0) {
+                    gameOver = true;
+                    std::cout << "Game Over! You lost!" << std::endl;
+                }
             }
         }
+
     }
 }
 
