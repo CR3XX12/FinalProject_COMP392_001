@@ -221,7 +221,7 @@ void checkCollisions() {
         if (distToPlayer < bullet.collider_dimension / 2.0f) {
             bullet.isAlive = false;
 
-            if (!gameOver) {
+            if (!gameOver && !gameWon) {
                 playerHealth -= 10;
                 playerHealth = std::max(0, playerHealth);  // clamp to 0
                 std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
@@ -283,7 +283,7 @@ void updateSceneGraph() {
         // Check collision with player
         float dist = glm::length(cam_pos - enemy.location);
         if (dist < enemy.collider_dimension / 2.0f) {
-            if (!gameOver && playerHealth > 0) {
+            if (!gameOver && !gameWon && playerHealth > 0) {
                 playerHealth -= 10;
                 playerHealth = std::max(0, playerHealth);  // clamp to 0
                 enemy.isAlive = false;
