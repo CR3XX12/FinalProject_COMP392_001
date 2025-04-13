@@ -188,8 +188,7 @@ void checkCollisions() {
             }
         }
     }
-
-    // Second: Check sceneGraph (bullets) vs enemyList (enemies)
+    
     for (int i = 0; i < sceneGraph.size(); i++) {
         GameObject& bullet = sceneGraph[i];
         if (!bullet.isAlive || bullet.type != BULLET || bullet.owner == 1) continue;
@@ -219,7 +218,7 @@ void checkCollisions() {
         float distToPlayer = glm::length(bullet.location - cam_pos);
         if (distToPlayer < bullet.collider_dimension / 2.0f) {
             bullet.isAlive = false;
-            playerHealth -= 5;
+            playerHealth -= 10;
             std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
 
             if (playerHealth <= 0 && !gameOver) {
@@ -252,7 +251,7 @@ void updateSceneGraph() {
         enemy.moving_direction = glm::normalize(cam_pos - enemy.location);
         enemy.location += enemy.moving_direction * enemy.velocity * (GLfloat)deltaTime;
 
-        // === ENEMY SHOOTING LOGIC HERE ===
+        // === ENEMY SHOOTING ===
         int now = glutGet(GLUT_ELAPSED_TIME);
         if (now - enemy.lastShotTime > enemyShootCooldown) {
             GameObject bullet;
@@ -268,7 +267,7 @@ void updateSceneGraph() {
             bullet.type = BULLET;
             bullet.moving_direction = glm::normalize(cam_pos - enemy.location);
             bullet.life_span = 4000;
-            bullet.textureID = texture[1]; // Or use a different one if available
+            bullet.textureID = texture[1];
             sceneGraph.push_back(bullet);
 
             enemy.lastShotTime = now;
@@ -320,14 +319,14 @@ void draw_level() {
 }
 
 void renderBitmapString(float x, float y, void* font, const char* string) {
-    glWindowPos2f(x, y); // Absolute screen-space position (bypasses matrices)
+    glWindowPos2f(x, y); 
     for (const char* c = string; *c != '\0'; c++) {
         glutBitmapCharacter(font, *c);
     }
 }
 
 void drawTextBackgroundBox(float x, float y, float width, float height) {
-    glColor3f(0.4f, 0.2f, 0.1f); // Brown
+    glColor3f(0.4f, 0.2f, 0.1f); 
 
     glBegin(GL_QUADS);
     glVertex2f(x, y);
@@ -372,7 +371,7 @@ void display() {
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
-        gluOrtho2D(0, 1024, 0, 1024);  // Match your window size
+        gluOrtho2D(0, 1024, 0, 1024);  // Match window size
 
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
@@ -447,7 +446,7 @@ void keyboard(unsigned char key, int x, int y)
 	//Added on Nov. 21 2021 by: Alireza Moghaddam
 	if (key == 'f')
 	{
-		//Create a bullet and place it inside the GameScene
+		//Create a bullet
 
         GameObject bullet;
         bullet.owner = 0;  // Player
