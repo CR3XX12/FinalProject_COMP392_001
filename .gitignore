@@ -1,6 +1,5 @@
 # Visual Studio cache files
 .vs/
-*.vcxproj*
 *.user
 *.suo
 *.ncb
