@@ -591,7 +591,7 @@ void init()
     GLint width1, height1;
     unsigned char* textureData1 = SOIL_load_image("moonSurface2.png", &width1, &height1, 0, SOIL_LOAD_RGB);
     GLint width2, height2;
-    unsigned char* textureData2 = SOIL_load_image("box.png", &width2, &height2, 0, SOIL_LOAD_RGB);
+    unsigned char* textureData2 = SOIL_load_image("bullet.png", &width2, &height2, 0, SOIL_LOAD_RGB);
 
     glGenBuffers(2, Buffers);
     glBindBuffer(GL_ARRAY_BUFFER, Buffers[0]);
