@@ -26,7 +26,8 @@ enum GameObject_Type {
     PLAYER,
     ENEMY,
     BULLET,
-    OBSTACLE
+    OBSTACLE,
+    FIREBALL,
 };
 
 struct GameObject {
@@ -67,8 +68,8 @@ float obstacle_data[Num_Obstacles][3];
 GLuint location;
 GLuint cam_mat_location;
 GLuint proj_mat_location;
-GLuint texture[2];
-GLuint Buffers[2];
+GLuint texture[10];
+GLuint Buffers[10];
 
 glm::mat4 model_view;
 glm::vec3 unit_z_vector = glm::vec3(0, 0, 1);
@@ -145,30 +146,30 @@ void drawPyramid(glm::vec3 scale, GLuint tex) {
 
 
 void spawnEnemy(std::vector<GameObject>& enemies, GLuint enemyTexture) {
-    float x = (rand() % 40 - 20);
-    float z = (rand() % 40 - 20);
 
-    // Prevent too-close spawn
+    float x = (rand() % 40 - 20);
+    float z = (rand() % 40);
+
     float distanceToPlayer = glm::length(glm::vec2(x - cam_pos.x, z - cam_pos.z));
     if (distanceToPlayer < 5.0f) return;
 
     GameObject enemy;
     enemy.scale = glm::vec3(1.0f);
-    enemy.location = glm::vec3(x, 0.5f, z);  // Set Y to 0.5 to rest on ground
-    enemy.rotation = glm::vec3(0.0f);
+    enemy.location = glm::vec3(x, 1.0f, z);
+	enemy.rotation = glm::vec3(-135.0f);
     enemy.type = ENEMY;
-    enemy.velocity = 0.003f + (rand() % 5) * 0.001f;
+    enemy.velocity = 0.001f + (rand() % 5) * 0.001f;
     enemy.isAlive = true;
     enemy.collider_dimension = 0.9f;
     enemy.isCollided = false;
     enemy.living_time = 0;
     enemy.life_span = -1;
-    enemy.textureID = enemyTexture;
+    enemy.textureID = texture[4];
     enemy.moving_direction = glm::vec3(0.0f);
     enemy.lastShotTime = glutGet(GLUT_ELAPSED_TIME);
     enemies.push_back(enemy);
-
 }
+
 
 void checkCollisions() {
     // First: Check sceneGraph vs sceneGraph (e.g., bullets hitting obstacles, etc.)
@@ -212,19 +213,21 @@ void checkCollisions() {
                 std::cout << "Bullet hit enemy!" << std::endl;
             }
         }
+
+       
     }
     // === Check if enemy bullets hit the player ===
-    for (GameObject& bullet : sceneGraph) {
-        if (!bullet.isAlive || bullet.type != BULLET || bullet.owner != 1) continue;
+    for (GameObject& fireball : sceneGraph) {
+        if (!fireball.isAlive || fireball.type != FIREBALL || fireball.owner != 1) continue;
 
-        float distToPlayer = glm::length(bullet.location - cam_pos);
-        if (distToPlayer < bullet.collider_dimension / 2.0f) {
-            bullet.isAlive = false;
+        float distToPlayer = glm::length(fireball.location - cam_pos);
+        if (distToPlayer < fireball.collider_dimension / 2.0f) {
+            fireball.isAlive = false;
 
             if (!gameOver && !gameWon) {
                 playerHealth -= 10;
                 playerHealth = std::max(0, playerHealth);  // clamp to 0
-                std::cout << "Hit by enemy bullet! Health: " << playerHealth << std::endl;
+                std::cout << "Hit by enemy fireball! Health: " << playerHealth << std::endl;
 
                 if (playerHealth <= 0) {
                     gameOver = true;
@@ -261,22 +264,22 @@ void updateSceneGraph() {
         // === ENEMY SHOOTING ===
         int now = glutGet(GLUT_ELAPSED_TIME);
         if (now - enemy.lastShotTime > enemyShootCooldown) {
-            GameObject bullet;
-            bullet.owner = 1;  // Enemy
-            bullet.location = enemy.location;
-            bullet.rotation = glm::vec3(0);
-            bullet.scale = glm::vec3(0.07f);
-            bullet.collider_dimension = bullet.scale.x;
-            bullet.isAlive = true;
-            bullet.living_time = 0;
-            bullet.isCollided = false;
-            bullet.velocity = 0.006f;
-            bullet.type = BULLET;
-            bullet.moving_direction = glm::normalize(cam_pos - enemy.location);
-            bullet.life_span = 4000;
-            bullet.textureID = texture[1];
-            sceneGraph.push_back(bullet);
-
+            GameObject fireball;
+            fireball.owner = 1;  // Enemy
+            fireball.location = enemy.location;
+            fireball.rotation = glm::vec3(0);
+            fireball.scale = glm::vec3(0.03f);
+            fireball.collider_dimension = fireball.scale.x;
+            fireball.isAlive = true;
+            fireball.living_time = 0;
+            fireball.isCollided = false;
+            fireball.velocity = 0.02f;
+            fireball.type = FIREBALL;
+            fireball.moving_direction = glm::normalize(cam_pos - enemy.location);
+            fireball.life_span = 4000;
+            fireball.textureID = texture[3];
+            sceneGraph.push_back(fireball);
+ 
             enemy.lastShotTime = now;
         }
 
@@ -296,9 +299,28 @@ void updateSceneGraph() {
             }
         }
 
+       
+
     }
 }
 
+void draw_bullet()
+{
+    updateSceneGraph();
+    glBindTexture(GL_TEXTURE_2D, texture[3]);
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    for (GameObject& go : sceneGraph) {
+        if (go.isAlive && !go.isCollided) {
+            model_view = glm::translate(glm::mat4(1.0), go.location);
+            glUniformMatrix4fv(location, 1, GL_FALSE, &model_view[0][0]);
+            drawCube(go.scale, texture[3]);
+            model_view = glm::mat4(1.0);
+        }
+    }
+
+}
 
 void draw_level() {
     glBindTexture(GL_TEXTURE_2D, texture[0]);
@@ -313,17 +335,28 @@ void draw_level() {
         if (go.isAlive && !go.isCollided) {
             model_view = glm::translate(glm::mat4(1.0), go.location);
             glUniformMatrix4fv(location, 1, GL_FALSE, &model_view[0][0]);
-            drawCube(go.scale, texture[1]);
+            if (go.type == OBSTACLE) {
+                drawCube(go.scale, texture[1]);
+            }
+            else if (go.type == BULLET) {
+
+                drawCube(go.scale, texture[2]);
+            }
+           
             model_view = glm::mat4(1.0);
         }
     }
+
+
+   
+
     for (GameObject& enemy : enemyList) {
         if (!enemy.isAlive || enemy.isCollided) continue;
+        model_view = glm::mat4(1.0f);
         model_view = glm::translate(glm::mat4(1.0), enemy.location);
         glUniformMatrix4fv(location, 1, GL_FALSE, &model_view[0][0]);
-        //drawCube(enemy.scale, enemy.textureID);
-        drawPyramid(enemy.scale, enemy.textureID);
-        model_view = glm::mat4(1.0);
+        drawPyramid(glm::vec3(0.5f), enemy.textureID);
+        model_view = glm::mat4(1.0f);
     }
 }
 
@@ -365,6 +398,7 @@ void display() {
 
     // Draw level and game objects
     draw_level();
+    draw_bullet();
 
     // === Overlay: Win or Loss Message ===
     if (gameWon || gameOver) {
@@ -455,23 +489,21 @@ void keyboard(unsigned char key, int x, int y)
 	//Added on Nov. 21 2021 by: Alireza Moghaddam
 	if (key == 'f')
 	{
-		//Create a bullet
 
-        GameObject bullet;
-        bullet.owner = 0;  // Player
-        bullet.location = cam_pos;
-        bullet.rotation = glm::vec3(0);
-        bullet.scale = glm::vec3(0.07f);
-        bullet.collider_dimension = bullet.scale.x;
-        bullet.isAlive = true;
-        bullet.living_time = 0;
-        bullet.isCollided = false;
-        bullet.velocity = 0.01f;
-        bullet.type = BULLET;
-        bullet.moving_direction = looking_dir_vector;
-        bullet.life_span = 4000;
-        bullet.textureID = texture[1];
-        sceneGraph.push_back(bullet);
+        GameObject go;
+        go.location = cam_pos;	//The bullet will spawn with an offset from the location of the player
+        go.rotation = glm::vec3(0, 0, 0);
+        go.scale = glm::vec3(0.07, 0.07, 0.07);
+        go.collider_dimension = go.scale.x;
+        go.isAlive = true;
+        go.living_time = 0;
+        go.isCollided = false;
+        go.velocity = 0.01;
+        go.type = BULLET;
+        go.moving_direction = looking_dir_vector;
+        go.life_span = 4000;	//Each bullet lives for 2 seconds
+        sceneGraph.push_back(go);
+
     }
 }
 
@@ -545,7 +577,10 @@ void init()
         sceneGraph.push_back(go);
     }
 
-    enemyTextureID = SOIL_load_OGL_texture("fire.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
+    /*enemyTextureID = SOIL_load_OGL_texture("ship.png",
+        SOIL_LOAD_AUTO,
+        SOIL_CREATE_NEW_ID,
+        SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y);
     if (enemyTextureID == 0) {
         std::cout << "Failed to load enemy texture!" << std::endl;
     }
@@ -556,7 +591,7 @@ void init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
 
 
     ShaderInfo shaders[] = {
@@ -587,13 +622,24 @@ void init()
         0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
     };
-
+    // t0
     GLint width1, height1;
-    unsigned char* textureData1 = SOIL_load_image("moonSurface2.png", &width1, &height1, 0, SOIL_LOAD_RGB);
+    unsigned char* textureData1 = SOIL_load_image("floor.png", &width1, &height1, 0, SOIL_LOAD_RGB);
+    //t1
     GLint width2, height2;
     unsigned char* textureData2 = SOIL_load_image("box.png", &width2, &height2, 0, SOIL_LOAD_RGB);
+    //t2
+    GLint width3, height3;
+    unsigned char* textureData3 = SOIL_load_image("bullet.png", &width3, &height3, 0, SOIL_LOAD_RGB);
+    //t3
+    GLint width4, height4;
+    unsigned char* textureData4 = SOIL_load_image("fire.png", &width4, &height4, 0, SOIL_LOAD_RGB);
+    //t4
+    GLint width5, height5;
+    unsigned char* textureData5 = SOIL_load_image("ammo.png", &width5, &height5, 0, SOIL_LOAD_RGB);
 
-    glGenBuffers(2, Buffers);
+    glGenBuffers(3, Buffers);
+
     glBindBuffer(GL_ARRAY_BUFFER, Buffers[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     glBindAttribLocation(program, 0, "vPosition");
@@ -606,11 +652,18 @@ void init()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
     glEnableVertexAttribArray(1);
 
+    glBindBuffer(GL_ARRAY_BUFFER, Buffers[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(textureCoordinates), textureCoordinates, GL_STATIC_DRAW);
+    glBindAttribLocation(program, 1, "vTexCoord");
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+    glEnableVertexAttribArray(1);
+
+
     location = glGetUniformLocation(program, "model_matrix");
     cam_mat_location = glGetUniformLocation(program, "camera_matrix");
     proj_mat_location = glGetUniformLocation(program, "projection_matrix");
 
-    glGenTextures(2, texture);
+    glGenTextures(10, texture);
 
     glBindTexture(GL_TEXTURE_2D, texture[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width1, height1, 0, GL_RGB, GL_UNSIGNED_BYTE, textureData1);
@@ -625,9 +678,31 @@ void init()
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    
+
+    glBindTexture(GL_TEXTURE_2D, texture[2]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width3, height3, 0, GL_RGB, GL_UNSIGNED_BYTE, textureData3);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, texture[3]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width4, height4, 0, GL_RGB, GL_UNSIGNED_BYTE, textureData4);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, texture[4]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width5, height5, 0, GL_RGB, GL_UNSIGNED_BYTE, textureData5);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+
     // Set a bright sky blue background
-    glClearColor(0.4f, 0.7f, 1.0f, 1.0f);  // R, G, B, A
+    glClearColor(0.5f, 0.6f, 0.7f, 1.0f);   // R, G, B, A
 
 }
 
